@@ -1,17 +1,25 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 from datasets import load_dataset
 
-# Load dataset
 dataset = load_dataset('json', data_files='data/feedback.jsonl')
 
-# Preprocess and tokenize
-# Assume labels: 'yes' -> 1, 'no' -> 0
-# Implement preprocessing steps here
+def preprocess(example):
+    example["label"] = 1 if example["feedback"] == "yes" else 0
+    return example
 
-# Initialize model
-model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
+dataset = dataset.map(preprocess)
 
-# Define training arguments
+model_name = "bert-base-uncased"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+
+def tokenize(example):
+    return tokenizer(example["query"] + " " + example["response"], truncation=True)
+
+dataset = dataset.map(tokenize, batched=True)
+
+model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+
 training_args = TrainingArguments(
     output_dir="models/reward_model",
     num_train_epochs=3,
@@ -21,13 +29,11 @@ training_args = TrainingArguments(
     logging_dir="logs",
 )
 
-# Initialize Trainer
 trainer = Trainer(
     model=model,
     args=training_args,
-    train_dataset=dataset['train'],
-    eval_dataset=dataset['validation'],
+    train_dataset=dataset["train"] if "train" in dataset else dataset["train"][:80],
+    eval_dataset=dataset["validation"] if "validation" in dataset else dataset["train"][80:],
 )
 
-# Train the model
 trainer.train()
